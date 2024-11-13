@@ -59,6 +59,66 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
 {
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
+
+    //make cache
+    Cache* c = (Cache*) calloc(1,sizeof(Cache));
+    if (!c) return nullptr;
+
+    //init vector
+    uint8_t numSets = size/(associativity * line_size);
+    c->setArr = std::vector<CacheSet*>(numSets);
+
+    //for each pointer init the struct and vector
+    for (int i = 0; i< numSets;i++){
+        CacheSet* cs = (CacheSet*) calloc(1,sizeof(CacheSet));
+        if (!cs) goto freeSet;
+        cs->lineArr = std::vector<CacheLine*>(associativity);
+        cs->cap = associativity;
+        c->setArr[i] = cs;
+
+        //for each pointer init the struct
+        for(int j = 0;j<associativity;j++){
+            CacheLine* cl = (CacheLine*) calloc(1,sizeof(CacheLine));
+            if (!cl) goto freeLine;
+            //set fields
+            cl->coreID = -1;
+            cl->dirty = false;
+            cl->lastAccess = 0;
+            cl->tag = 0;
+            cl->valid = false;
+
+            c->setArr[i]->lineArr[j] = cl;
+        }
+    }
+
+    //set fields
+    c->lineSize = line_size;
+    c->numWays = associativity;
+    c->numSets = numSets;
+    c->policy = replacement_policy;
+
+    return c;
+
+    //errors
+    freeLine:
+    for (int i = 0; i< numSets;i++){
+        if(!c->setArr[i]) continue;
+        for (int j=0;j<associativity;j++){
+            free(c->setArr[i]->lineArr[j]);
+        }
+        free(c->setArr[i]);
+        goto freeCache;
+    }
+
+
+    freeSet:
+    for (int i = 0; i< numSets;i++){
+        free(c->setArr[i]);
+    }
+
+    freeCache:
+        free(c);
+        return nullptr;
 }
 
 /**

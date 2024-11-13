@@ -10,6 +10,7 @@
 #define __CACHE_H__
 
 #include "types.h"
+#include <vector>
 // You may add any other #include directives you need here, but make sure they
 // compile on the reference machine!
 
@@ -32,11 +33,51 @@
 // TODO: Define any other data structures you need here.
 // Refer to Appendix A for details on data structures you will need here.
 
+typedef struct CacheLine {
+    bool valid;
+    bool dirty;
+    uint64_t tag;
+    unsigned int coreID;
+    uint64_t lastAccess;
+} CacheLine;
+
+typedef struct CacheSet {
+    uint8_t cap;
+    std::vector<CacheLine*> lineArr;
+}CacheSet;
+ 
+/** Possible replacement policies for the cache. */
+typedef enum ReplacementPolicyEnum
+{
+    LRU = 0,    // Evict the least recently used line.
+    RANDOM = 1, // Evict a random line.
+
+    /**
+     * Evict according to a static way partitioning policy.
+     * Part E asks you to implement this policy for extra credit.
+     */
+    SWP = 2,
+
+    /**
+     * Evict according to a dynamic way partitioning policy.
+     * Part F asks you to implement this policy for extra credit.
+     */
+    DWP = 3,
+} ReplacementPolicy;
+
+
 /** A single cache module. */
 typedef struct Cache
 {
     // TODO: Define any other fields you need here.
     // Refer to Appendix A for details on other fields you will need here.
+    
+    std::vector<CacheSet*> setArr; // array of pointers
+    ReplacementPolicy policy;
+    uint8_t numWays;
+    uint8_t numSets;
+    uint64_t lineSize;
+    CacheLine *lastEvictedLine;
 
     /**
      * The total number of times this cache was accessed for a read.
@@ -75,25 +116,6 @@ typedef enum CacheResultEnum
     HIT = 1,  // The access hit the cache.
     MISS = 0, // The access missed the cache.
 } CacheResult;
-
-/** Possible replacement policies for the cache. */
-typedef enum ReplacementPolicyEnum
-{
-    LRU = 0,    // Evict the least recently used line.
-    RANDOM = 1, // Evict a random line.
-
-    /**
-     * Evict according to a static way partitioning policy.
-     * Part E asks you to implement this policy for extra credit.
-     */
-    SWP = 2,
-
-    /**
-     * Evict according to a dynamic way partitioning policy.
-     * Part F asks you to implement this policy for extra credit.
-     */
-    DWP = 3,
-} ReplacementPolicy;
 
 ///////////////////////////////////////////////////////////////////////////////
 //                            FUNCTION PROTOTYPES                            //
