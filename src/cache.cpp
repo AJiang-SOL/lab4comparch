@@ -110,7 +110,6 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
         goto freeCache;
     }
 
-
     freeSet:
     for (int i = 0; i< numSets;i++){
         free(c->setArr[i]);
@@ -141,6 +140,32 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
     // TODO: Return HIT if the access hits in the cache, and MISS otherwise.
     // TODO: If is_write is true, mark the resident line as dirty.
     // TODO: Update the appropriate cache statistics.
+
+    //dynamic mask assuming lineSize * numSet is base 2
+    uint64_t mask = (c->lineSize*c->numSets) - 1;
+    uint64_t tag = line_addr & !mask;
+    int index = line_addr & mask;
+
+    //update stats
+    if (is_write) c->stat_write_access++;
+    else c->stat_read_access++;
+
+
+    CacheSet* cs = c->setArr[index];
+    for(int i = 0; i< c->numWays; i++){
+        CacheLine* cl = cs->lineArr[i];
+        if (tag == cl->tag){
+            if (is_write) cl->dirty = true;
+            return HIT;
+        }
+    }
+    
+    //update counts
+    if (is_write) c->stat_write_miss++;
+    else c->stat_read_miss++;
+
+    return MISS;
+
 }
 
 /**
