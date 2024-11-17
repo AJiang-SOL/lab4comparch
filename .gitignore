@@ -1,3 +1,6 @@
 /ref
 /results
 /traces
+*.o
+*.out
+.vscode

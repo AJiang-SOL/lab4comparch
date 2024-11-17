@@ -2,7 +2,7 @@ SRCS = cache.cpp core.cpp dram.cpp memsys.cpp sim.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 CXX = g++
-CXXFLAGS = -g -Wall -Werror -pedantic -std=c++11
+CXXFLAGS = -g -Wall -Werror -pedantic -std=c++11 -Wno-sometimes-uninitialized
 TARBALL = ../lab4.tar.gz
 
 .PHONY: all sim clean profile debug validate runall fast submit

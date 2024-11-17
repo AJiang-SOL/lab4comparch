@@ -265,22 +265,50 @@ uint64_t memsys_access_modeBC(MemorySystem *sys, uint64_t line_addr,
                               AccessType type, unsigned int core_id)
 {
     uint64_t delay = 0;
+    bool is_write;
+    bool useICache;
+
 
     if (type == ACCESS_TYPE_IFETCH)
     {
         // TODO: Simulate the instruction fetch and update delay accordingly.
+        is_write = false;
+        useICache = true;
     }
 
     if (type == ACCESS_TYPE_LOAD)
     {
         // TODO: Simulate the data load and update delay accordingly.
+        is_write = false;
+        useICache = false;
     }
 
     if (type == ACCESS_TYPE_STORE)
     {
         // TODO: Simulate the data store and update delay accordingly.
+        is_write = true;
+        useICache = false;
     }
 
+    if (useICache){
+        delay+=ICACHE_HIT_LATENCY;
+        if (cache_access(sys->icache,line_addr,is_write,core_id)) return delay;
+        delay+= memsys_l2_access(sys,line_addr,false,core_id);
+        cache_install(sys->icache,line_addr,is_write,core_id);
+        if (sys->icache->lastEvictedLine.dirty && sys->icache->lastEvictedLine.valid){
+            memsys_l2_access(sys,sys->icache->lastEvictedLineAddr,true,core_id);
+            sys->icache->lastEvictedLine.valid = false;
+        } 
+    }else{
+        delay+=DCACHE_HIT_LATENCY;
+        if (cache_access(sys->dcache,line_addr,is_write,core_id)) return delay;
+        delay+= memsys_l2_access(sys,line_addr,false,core_id);
+        cache_install(sys->dcache,line_addr,is_write,core_id);
+        if (sys->dcache->lastEvictedLine.dirty && sys->dcache->lastEvictedLine.valid){
+            memsys_l2_access(sys,sys->dcache->lastEvictedLineAddr,true,core_id);
+            sys->dcache->lastEvictedLine.valid = false;
+        }
+    }
     return delay;
 }
 
@@ -312,6 +340,14 @@ uint64_t memsys_l2_access(MemorySystem *sys, uint64_t line_addr,
     //       Note that writebacks are done off the critical path.
     // This will help us track your memory reads and memory writes.
 
+    CacheResult res = cache_access(sys->l2cache, line_addr, is_writeback, core_id);
+    if (res) return delay;
+    delay += dram_access(sys->dram,line_addr, false);
+    cache_install(sys->l2cache,line_addr,is_writeback,core_id);
+    if (sys->l2cache->lastEvictedLine.dirty && sys->l2cache->lastEvictedLine.valid){
+        dram_access(sys->dram, sys->l2cache->lastEvictedLineAddr, true);
+        sys->l2cache->lastEvictedLine.valid = false;
+    }
     return delay;
 }
 
@@ -347,21 +383,49 @@ uint64_t memsys_access_modeDEF(MemorySystem *sys, uint64_t v_line_addr,
     //       4 KB, as indicated by the PAGE_SIZE constant.
     // Note: memsys_convert_vpn_to_pfn() operates at page granularity and
     //       returns a page number.
-    p_line_addr = v_line_addr; // Replace this with a correct implementation.
+    p_line_addr = memsys_convert_vpn_to_pfn(sys,v_line_addr,core_id); // Replace this with a correct implementation.
 
+    bool is_write;
+    bool useICache;
     if (type == ACCESS_TYPE_IFETCH)
     {
         // TODO: Simulate the instruction fetch and update delay accordingly.
+        is_write = false;
+        useICache = true;
     }
 
     if (type == ACCESS_TYPE_LOAD)
     {
         // TODO: Simulate the data load and update delay accordingly.
+        is_write = false;
+        useICache = false;
     }
 
     if (type == ACCESS_TYPE_STORE)
     {
         // TODO: Simulate the data store and update delay accordingly.
+        is_write = true;
+        useICache = false;
+    }
+
+    if (useICache){
+        delay+=ICACHE_HIT_LATENCY;
+        if (cache_access(sys->icache,p_line_addr,is_write,core_id)) return delay;
+        delay+= memsys_l2_access(sys,p_line_addr,false,core_id);
+        cache_install(sys->icache,p_line_addr,is_write,core_id);
+        if (sys->icache->lastEvictedLine.dirty && sys->icache->lastEvictedLine.valid){
+            memsys_l2_access(sys,sys->icache->lastEvictedLineAddr,true,core_id);
+            sys->icache->lastEvictedLine.valid = false;
+        } 
+    }else{
+        delay+=DCACHE_HIT_LATENCY;
+        if (cache_access(sys->dcache,p_line_addr,is_write,core_id)) return delay;
+        delay+= memsys_l2_access(sys,p_line_addr,false,core_id);
+        cache_install(sys->dcache,p_line_addr,is_write,core_id);
+        if (sys->dcache->lastEvictedLine.dirty && sys->dcache->lastEvictedLine.valid){
+            memsys_l2_access(sys,sys->dcache->lastEvictedLineAddr,true,core_id);
+            sys->dcache->lastEvictedLine.valid = false;
+        }
     }
 
     return delay;

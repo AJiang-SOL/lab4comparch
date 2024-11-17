@@ -79,6 +79,35 @@ DRAM *dram_new()
 {
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
+    DRAM *dram;
+    rowBuffer* rb;
+    int numCol;
+
+    dram =(DRAM*) calloc(1,sizeof(DRAM));
+    if (!dram) return nullptr; 
+
+    numCol =  ROW_BUFFER_SIZE/CACHE_LINESIZE;
+
+    dram->arrRow = std::vector<rowBuffer*>(NUM_BANKS);
+    for (int i=0;i<NUM_BANKS;i++){
+        rb = (rowBuffer*) calloc(1,sizeof(rowBuffer));
+        if (!rb) goto free;
+        rb->valid = false;
+        dram->arrRow[i] = rb;
+    }
+    //set fields
+    dram->numCol = numCol; 
+
+    return dram;
+
+    free:
+    for (int i=0;i<NUM_BANKS;i++){
+        free(dram->arrRow[i]);
+    }
+    free(dram);
+    return nullptr;
+
+
 }
 
 /**
@@ -103,6 +132,20 @@ uint64_t dram_access(DRAM *dram, uint64_t line_addr, bool is_dram_write)
     // TODO: Update the appropriate DRAM statistics.
     // TODO: Call the dram_access_mode_CDEF() function as needed.
     // TODO: Return the delay in cycles incurred by this DRAM access.
+
+    uint64_t delay;
+
+    //update stats
+    if (is_dram_write) dram->stat_write_access+=1;
+    else dram->stat_read_access +=1;
+
+    if (SIM_MODE == SIM_MODE_B) delay = DELAY_SIM_MODE_B;
+    else delay = dram_access_mode_CDEF(dram,line_addr,is_dram_write);
+
+    if (is_dram_write) dram->stat_write_delay+=delay;
+    else dram->stat_read_delay+= delay;
+
+    return delay;
 }
 
 /**
@@ -129,6 +172,29 @@ uint64_t dram_access_mode_CDEF(DRAM *dram, uint64_t line_addr,
     // row buffers in consecutive rows.
     // TODO: Use this function to track open rows.
     // TODO: Compute the delay based on row buffer hit/miss/empty.
+    uint64_t delay = 0;
+    rowBuffer* rb;
+    uint64_t mask = NUM_BANKS-1;
+    uint64_t bankId = (line_addr >> (int) log2(dram->numCol)) & mask;
+    uint64_t rowId = (line_addr >> (int) log2(dram->numCol)) & ~mask;
+
+    rb = dram->arrRow[bankId];
+
+    if (DRAM_PAGE_POLICY == OPEN_PAGE){
+        if (rowId == rb->rowId && rb->valid){
+            delay = DELAY_CAS + DELAY_BUS;
+        }else if(!rb->valid){
+            delay = DELAY_ACT + DELAY_CAS + DELAY_BUS;
+        } else{
+            delay = DELAY_PRE + DELAY_ACT + DELAY_CAS + DELAY_BUS;
+        }
+    } else if(DRAM_PAGE_POLICY == CLOSE_PAGE){
+        delay = DELAY_ACT + DELAY_CAS + DELAY_BUS;
+    }
+    rb->rowId = rowId;
+    rb->valid = true;
+
+    return delay;
 }
 
 /**

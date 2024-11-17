@@ -39,10 +39,12 @@ typedef struct CacheLine {
     uint64_t tag;
     unsigned int coreID;
     uint64_t lastAccess;
+    uint64_t lineAddr;
 } CacheLine;
 
 typedef struct CacheSet {
-    uint8_t cap;
+    uint64_t cap;
+    uint64_t size;
     std::vector<CacheLine*> lineArr;
 }CacheSet;
  
@@ -74,10 +76,11 @@ typedef struct Cache
     
     std::vector<CacheSet*> setArr; // array of pointers
     ReplacementPolicy policy;
-    uint8_t numWays;
-    uint8_t numSets;
+    uint64_t numWays;
+    uint64_t numSets;
     uint64_t lineSize;
-    CacheLine *lastEvictedLine;
+    CacheLine lastEvictedLine;
+    uint64_t lastEvictedLineAddr;
 
     /**
      * The total number of times this cache was accessed for a read.

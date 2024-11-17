@@ -9,6 +9,11 @@
 #include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <random>
+
+std::random_device rd;
+std::mt19937 gen(rd());
+
 // You may add any other #include directives you need here, but make sure they
 // compile on the reference machine!
 
@@ -65,15 +70,16 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
     if (!c) return nullptr;
 
     //init vector
-    uint8_t numSets = size/(associativity * line_size);
+    uint64_t numSets = size/(associativity * line_size);
     c->setArr = std::vector<CacheSet*>(numSets);
 
     //for each pointer init the struct and vector
     for (int i = 0; i< numSets;i++){
         CacheSet* cs = (CacheSet*) calloc(1,sizeof(CacheSet));
-        if (!cs) goto freeSet;
+        if (!cs) goto freeLine;
         cs->lineArr = std::vector<CacheLine*>(associativity);
         cs->cap = associativity;
+        cs->size = 0;
         c->setArr[i] = cs;
 
         //for each pointer init the struct
@@ -107,17 +113,9 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
             free(c->setArr[i]->lineArr[j]);
         }
         free(c->setArr[i]);
-        goto freeCache;
     }
-
-    freeSet:
-    for (int i = 0; i< numSets;i++){
-        free(c->setArr[i]);
-    }
-
-    freeCache:
-        free(c);
-        return nullptr;
+    free(c);
+    return nullptr;
 }
 
 /**
@@ -142,8 +140,8 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
     // TODO: Update the appropriate cache statistics.
 
     //dynamic mask assuming lineSize * numSet is base 2
-    uint64_t mask = (c->lineSize*c->numSets) - 1;
-    uint64_t tag = line_addr & !mask;
+    uint64_t mask = (c->numSets) - 1;
+    uint64_t tag = line_addr & ~mask;
     int index = line_addr & mask;
 
     //update stats
@@ -154,12 +152,13 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
     CacheSet* cs = c->setArr[index];
     for(int i = 0; i< c->numWays; i++){
         CacheLine* cl = cs->lineArr[i];
-        if (tag == cl->tag){
+        if (tag == cl->tag && cl->valid){
             if (is_write) cl->dirty = true;
+            cl->lastAccess = current_cycle;
             return HIT;
         }
     }
-    
+
     //update counts
     if (is_write) c->stat_write_miss++;
     else c->stat_read_miss++;
@@ -189,6 +188,40 @@ void cache_install(Cache *c, uint64_t line_addr, bool is_write,
     //       track writebacks.
     // TODO: Initialize the victim entry with the line to install.
     // TODO: Update the appropriate cache statistics.
+
+    unsigned int lineIndx;
+    uint64_t mask = (c->numSets) - 1;
+    uint64_t tag = line_addr & ~mask;
+    int index = line_addr & mask;
+
+    CacheSet* cs = c->setArr[index];
+    //max capacity
+    if (cs->size == cs->cap){
+        lineIndx = cache_find_victim(c,index,core_id);
+        CacheLine* cl = cs->lineArr[lineIndx];
+        c->lastEvictedLine = *cl;
+        c->lastEvictedLineAddr = cl->lineAddr;
+        if (cl->dirty) c->stat_dirty_evicts+=1;
+        cl->coreID = core_id;
+        cl->dirty = false;
+        cl->tag = tag;
+        cl->valid = true;
+        cl->lastAccess = current_cycle;
+        cl->lineAddr = line_addr;
+    //theres still space
+    }else { 
+        for (int i = 0; i<c->numWays;i++) {
+            if (cs->lineArr[i]->valid) continue;
+            cs->lineArr[i]->coreID = core_id;
+            cs->lineArr[i]->dirty = false;
+            cs->lineArr[i]->tag = tag;
+            cs->lineArr[i]->valid = true;
+            cs->lineArr[i]->lastAccess = current_cycle;
+            cs->lineArr[i]->lineAddr = line_addr;
+            cs->size++;
+            break;
+        }
+    }
 }
 
 /**
@@ -215,6 +248,29 @@ unsigned int cache_find_victim(Cache *c, unsigned int set_index,
     // TODO: In part A, implement the LRU and random replacement policies.
     // TODO: In part E, for extra credit, implement static way partitioning.
     // TODO: In part F, for extra credit, implement dynamic way partitioning.
+    
+    unsigned int retVal = 0;
+    if (c->policy == LRU){
+        std::vector<CacheLine*> lineArr = c->setArr[set_index]->lineArr;
+        unsigned int victim = 0;
+        uint64_t cycle = lineArr[0]->lastAccess;
+        CacheLine* cl;
+        for (int i=0;i<c->numWays;i++){
+            cl = lineArr[i];
+            if (cl->lastAccess < cycle){
+                cycle = cl->lastAccess;
+                victim = i;
+            }
+        }
+        retVal = victim;
+
+    }
+    else if (c->policy == RANDOM){
+        std::uniform_int_distribution<int> dis(0, c->numWays);
+        unsigned int randVictim = dis(gen);
+        retVal = randVictim;
+    }
+    return retVal;
 }
 
 /**

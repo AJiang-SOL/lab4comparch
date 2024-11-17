@@ -10,6 +10,7 @@
 #define __DRAM_H__
 
 #include "types.h"
+#include <vector>
 // You may add any other #include directives you need here, but make sure they
 // compile on the reference machine!
 
@@ -19,12 +20,19 @@
 
 // TODO: Define any other data structures you need here.
 // Refer to Appendix B for details on data structures you will need here.
+typedef struct rowBuffer{
+    bool valid;
+    uint64_t rowId; 
+} rowBuffer;
+
 
 /** A DRAM module. */
 typedef struct DRAM
 {
     // TODO: Define any other fields you need here.
     // Refer to Appendix B for details on other fields you will need here.
+    std::vector<rowBuffer*> arrRow;
+    int numCol;
 
     /**
      * The total number of times DRAM was accessed for a read.
